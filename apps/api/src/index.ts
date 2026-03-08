@@ -63,6 +63,10 @@ app.use((req: Request, _res: Response, next: NextFunction) => {
   next();
 });
 
+app.get("/", (_req: Request, res: Response) => {
+  res.json({ ok: true, service: "augur-api", docs: "https://augurxrpl.com" });
+});
+
 // core health
 app.get("/health", (_req: Request, res: Response) => {
   res.json({
