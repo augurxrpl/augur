@@ -11,6 +11,7 @@
     "snapshot": "pnpm -C apps/api snapshot",
     "monthly": "pnpm -C apps/api monthly",
     "export:public": "bash ./scripts/export_public.sh",
-    "publish:public": "pnpm monthly $(date -u +%Y-%m) && pnpm export:public $(date -u +%Y-%m)"
+    "publish:public": "pnpm monthly $(date -u +%Y-%m) && pnpm export:public $(date -u +%Y-%m)",
+    "start:api": "pnpm -C apps/api start"
   }
 }
