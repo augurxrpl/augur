@@ -79,3 +79,25 @@ apps/api/src/*.bak.*
 # local scratch
 PATH_FROM_GREP
 /tmp/augur_cli_dbg/
+
+# secrets
+.env
+*.env
+.env.*
+*.pem
+*.key
+
+# runtime
+node_modules/
+dist/
+build/
+*.log
+.DS_Store
+
+# backups
+*.bak
+*.backup
+*.broken.*
+
+# runtime data
+data/
