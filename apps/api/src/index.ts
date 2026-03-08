@@ -177,6 +177,131 @@ app.get("/api/statement", async (req: Request, res: Response) => {
   }
 });
 
+app.get("/api/classification", async (req: Request, res: Response) => {
+  try {
+    const address = String(req.query.address || "").trim();
+
+    if (!address) {
+      return res.status(400).json({ ok:false, error:"Missing address" });
+    }
+
+    if (!isValidClassicAddress(address)) {
+      return res.status(400).json({ ok:false, error:"Invalid XRPL address" });
+    }
+
+    const c = await xrplClient();
+
+    const ai:any = await c.request({
+      command: "account_info",
+      account: address,
+      ledger_index: "validated",
+      strict: true
+    });
+
+    const ad = ai.result.account_data;
+    const drops = String(ad.Balance || "0");
+    const balanceXRP = (Number(drops)/1000000)
+      .toFixed(6)
+      .replace(/0+$/,"")
+      .replace(/\.$/,"");
+
+    let trustlines = 0;
+    try {
+      const al:any = await c.request({
+        command:"account_lines",
+        account:address,
+        ledger_index:"validated",
+        limit:200
+      });
+      trustlines = (al.result.lines || []).length;
+    } catch {}
+
+    let recentTxCount = 0;
+    try {
+      const tx:any = await c.request({
+        command:"account_tx",
+        account:address,
+        ledger_index_min:-1,
+        ledger_index_max:-1,
+        limit:10
+      });
+      recentTxCount = (tx.result.transactions || []).length;
+    } catch {}
+
+    const ownerCount = Number(ad.OwnerCount || 0);
+    const balanceNum = Number(balanceXRP || "0");
+
+    let classification = "Active Wallet";
+    let confidence = 60;
+    let activityLevel = recentTxCount >= 8 ? "High" : recentTxCount >= 3 ? "Medium" : "Low";
+
+    if (recentTxCount === 0) {
+      classification = "Dormant Wallet";
+      confidence = 88;
+      activityLevel = "Low";
+    } else if (trustlines >= 5) {
+      classification = "Builder-Style Wallet";
+      confidence = 74;
+    } else if (ownerCount > 0 && trustlines > 1) {
+      classification = "Liquidity-Style Wallet";
+      confidence = 71;
+    } else if (balanceNum > 0 && trustlines > 0 && recentTxCount > 0) {
+      classification = "Accumulator";
+      confidence = 76;
+    }
+
+    const summary:string[] = [];
+
+    if (classification === "Dormant Wallet") {
+      summary.push("This wallet appears mostly inactive right now.");
+      summary.push("Recent transaction activity is minimal or absent.");
+    } else if (classification === "Builder-Style Wallet") {
+      summary.push("This wallet shows broader XRPL participation across multiple trustlines.");
+      summary.push("Behavior leans toward active ecosystem usage.");
+    } else if (classification === "Liquidity-Style Wallet") {
+      summary.push("This wallet shows signs consistent with asset and ledger-object participation.");
+      summary.push("Behavior may include liquidity or structured XRPL usage.");
+    } else if (classification === "Accumulator") {
+      summary.push("This wallet appears active on XRPL.");
+      summary.push("Behavior currently leans toward accumulation or active holding.");
+    } else {
+      summary.push("This wallet is active and participating on XRPL.");
+      summary.push("Behavior is mixed based on the current signal set.");
+    }
+
+    if (trustlines > 0) {
+      summary.push("Trustline count suggests participation beyond XRP alone.");
+    }
+
+    summary.push("AUGUR is read-only. No keys. No custody.");
+
+    return res.json({
+      ok:true,
+      address,
+      classification,
+      confidence,
+      activityLevel,
+      signals:{
+        recentTxCount,
+        trustlines,
+        ownerCount,
+        balanceXRP
+      },
+      summary,
+      source:{
+        rippled:"wss://s1.ripple.com",
+        ts:new Date().toISOString()
+      }
+    });
+
+  } catch(e:any) {
+    return res.status(500).json({
+      ok:false,
+      error:String(e?.message || e)
+    });
+  }
+});
+
 // core health
 app.get("/health", (_req: Request, res: Response) => {
   res.json({
