@@ -4,6 +4,7 @@ import type { Request, Response, NextFunction } from "express";
 import fs from "node:fs";
 import path from "node:path";
 import { mountExtras } from "./mount_extras";
+import { Client, isValidClassicAddress } from "xrpl";
 
 type Account = {
   id?: string;
@@ -65,6 +66,115 @@ app.use((req: Request, _res: Response, next: NextFunction) => {
 
 app.get("/", (_req: Request, res: Response) => {
   res.json({ ok: true, service: "augur-api", docs: "https://augurxrpl.com" });
+});
+
+let _xrplClient: Client | null = null;
+let _xrplConn: Promise<Client> | null = null;
+
+async function xrplClient(): Promise<Client> {
+  if (_xrplClient) return _xrplClient;
+  if (_xrplConn) return _xrplConn;
+
+  _xrplConn = (async () => {
+    const c = new Client("wss://s1.ripple.com");
+    await c.connect();
+    _xrplClient = c;
+    _xrplConn = null;
+    return c;
+  })();
+
+  return _xrplConn;
+}
+
+app.get("/api/statement", async (req: Request, res: Response) => {
+  try {
+
+    const address = String(req.query.address || "").trim();
+
+    if (!address) {
+      return res.status(400).json({ ok:false, error:"Missing address" });
+    }
+
+    if (!isValidClassicAddress(address)) {
+      return res.status(400).json({ ok:false, error:"Invalid XRPL address" });
+    }
+
+    const c = await xrplClient();
+
+    const ai:any = await c.request({
+      command: "account_info",
+      account: address,
+      ledger_index: "validated",
+      strict: true
+    });
+
+    const ad = ai.result.account_data;
+
+    const drops = String(ad.Balance || "0");
+    const xrp = (Number(drops)/1000000)
+      .toFixed(6)
+      .replace(/0+$/,"")
+      .replace(/\.$/,"");
+
+    let trustlines = 0;
+
+    try {
+      const al:any = await c.request({
+        command:"account_lines",
+        account:address,
+        ledger_index:"validated",
+        limit:200
+      });
+
+      trustlines = (al.result.lines || []).length;
+
+    } catch {}
+
+    let recentTxCount = 0;
+
+    try {
+      const tx:any = await c.request({
+        command:"account_tx",
+        account:address,
+        ledger_index_min:-1,
+        ledger_index_max:-1,
+        limit:10
+      });
+
+      recentTxCount = (tx.result.transactions || []).length;
+
+    } catch {}
+
+    return res.json({
+      ok:true,
+      address,
+      network:"XRPL",
+      balanceXRP:xrp,
+      sequence:Number(ad.Sequence),
+      ownerCount:Number(ad.OwnerCount),
+      trustlines,
+      recentTxCount,
+      statement:[
+        `Wallet ${address} is active on XRPL.`,
+        `Current XRP balance is ${xrp} XRP.`,
+        `Sequence is ${ad.Sequence}. OwnerCount is ${ad.OwnerCount}.`,
+        `Trustlines: ${trustlines}. Recent transactions sampled: ${recentTxCount}.`,
+        `AUGUR is read-only. No keys. No custody.`
+      ],
+      source:{
+        rippled:"wss://s1.ripple.com",
+        ts:new Date().toISOString()
+      }
+    });
+
+  } catch(e:any) {
+
+    return res.status(500).json({
+      ok:false,
+      error:String(e?.message || e)
+    });
+
+  }
 });
 
 // core health

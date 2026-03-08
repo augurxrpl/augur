@@ -10,7 +10,8 @@
   },
   "dependencies": {
     "cors": "^2.8.5",
-    "express": "^4.22.1"
+    "express": "^4.22.1",
+    "xrpl": "^4.6.0"
   },
   "devDependencies": {
     "tsx": "^4.19.2"
