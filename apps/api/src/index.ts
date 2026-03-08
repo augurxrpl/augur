@@ -5,6 +5,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { mountExtras } from "./mount_extras";
 import { Client, isValidClassicAddress } from "xrpl";
+import cors from "cors";
 
 type Account = {
   id?: string;
@@ -51,6 +52,7 @@ function withId(a: Account, idx: number): Account {
 }
 
 const app = express();
+app.use(cors());
 
 app.disable("x-powered-by");
 
