@@ -8,11 +8,11 @@ import {
   purgeDeletedAccounts
 } from "./vault/writer.js";
 
-export function routes(app: Express) {
-  app.get("/health", (_req, res) => res.json({ ok: true, service: "augur-api" }));
+// This file is intentionally not the canonical intelligence router.
+// Live wallet intelligence routes are defined in src/index.ts.
+// If this file is mounted later, it should only handle vault/account utilities.
 
-  // Default active only
-  // Full list: /api/accounts?all=1
+export function routes(app: Express) {
   app.get("/api/accounts", async (req, res) => {
     await ensureVault(CONFIG.vaultPath);
     const accounts = await readAccounts(CONFIG.vaultPath);
@@ -25,6 +25,7 @@ export function routes(app: Express) {
 
   app.post("/api/accounts", async (req, res) => {
     const { type, chain, label, address_or_identifier, network } = req.body || {};
+
     if (!type || !chain || !label || !address_or_identifier) {
       return res.status(400).json({
         ok: false,
@@ -33,6 +34,7 @@ export function routes(app: Express) {
     }
 
     await ensureVault(CONFIG.vaultPath);
+
     const account = await addAccount(CONFIG.vaultPath, {
       type,
       chain,
@@ -62,7 +64,6 @@ export function routes(app: Express) {
     res.json({ ok: true, account });
   });
 
-  // Hard purge deleted accounts from the vault store
   app.post("/api/accounts/purge-deleted", async (_req, res) => {
     await ensureVault(CONFIG.vaultPath);
     const result = await purgeDeletedAccounts(CONFIG.vaultPath);
