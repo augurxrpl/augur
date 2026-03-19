@@ -150,16 +150,20 @@ app.get("/api/risk", async (req: Request, res: Response) => {
   });
 });
 
-try {
-  mountExtras(app);
-} catch (error) {
-  console.error("[augur] mountExtras failed", error);
+async function start() {
+  try {
+    await mountExtras(app);
+  } catch (error) {
+    console.error("[augur] mountExtras failed", error);
+  }
+
+  app.use((_req: Request, res: Response) => {
+    res.status(404).json(errorBody("Not found"));
+  });
+
+  app.listen(PORT, HOST, () => {
+    console.log(`[augur] listening on http://${HOST}:${PORT}`);
+  });
 }
 
-app.use((_req: Request, res: Response) => {
-  res.status(404).json(errorBody("Not found"));
-});
-
-app.listen(PORT, HOST, () => {
-  console.log(`[augur] listening on http://${HOST}:${PORT}`);
-});
+start();
