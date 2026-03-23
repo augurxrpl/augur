@@ -1,4 +1,5 @@
 import { Client } from "xrpl";
+import { summarizeTransaction } from "./txSummary";
 
 export const XRPL_URL = process.env.AUGUR_XRPL_URL || "wss://s1.ripple.com";
 
@@ -16,6 +17,8 @@ export type WalletRead = {
   address: string;
   network: "XRPL";
   balanceXRP: string;
+  tokenHoldings: Array<{ currency: string; issuer: string; balance: string; limit: string }>;
+  transactionBreakdown: Array<{ hash: string; timestamp: number | null; type: string; result: string; summary: string; amount: string | null; currency: string | null; issuer: string | null; counterparty: string | null }>;
   balanceDrops: string;
   sequence: number;
   ownerCount: number;
@@ -28,18 +31,37 @@ export type WalletRead = {
 };
 
 async function getClient(): Promise<Client> {
-  if (cachedClient) return cachedClient;
+  if (cachedClient && cachedClient.isConnected()) return cachedClient;
   if (pendingClient) return pendingClient;
 
   pendingClient = (async () => {
+    if (cachedClient) {
+      try {
+        if (cachedClient.isConnected()) {
+          await cachedClient.disconnect();
+        }
+      } catch {}
+      cachedClient = null;
+    }
+
     const client = new Client(XRPL_URL);
+
+    client.on("disconnected", () => {
+      if (cachedClient === client) cachedClient = null;
+    });
+
     await client.connect();
     cachedClient = client;
     pendingClient = null;
     return client;
   })();
 
-  return pendingClient;
+  try {
+    return await pendingClient;
+  } catch (err) {
+    pendingClient = null;
+    throw err;
+  }
 }
 
 function formatXrp(drops: string): string {
@@ -48,6 +70,41 @@ function formatXrp(drops: string): string {
     .replace(/0+$/, "")
     .replace(/\.$/, "");
 }
+
+async function readTokenHoldings(client: Client, address: string): Promise<Array<{ currency: string; issuer: string; balance: string; limit: string }>> {
+  let out: Array<{ currency: string; issuer: string; balance: string; limit: string }> = [];
+  let marker: unknown = undefined;
+  let pages = 0;
+
+  while (pages < 20) {
+    const result: any = await client.request({
+      command: "account_lines",
+      account: address,
+      ledger_index: "validated",
+      limit: 400,
+      marker
+    });
+
+    const lines = Array.isArray(result?.result?.lines) ? result.result.lines : [];
+    out.push(
+      ...lines
+        .filter((line: any) => Number(line?.balance || 0) !== 0)
+        .map((line: any) => ({
+          currency: String(line?.currency || ""),
+          issuer: String(line?.account || ""),
+          balance: String(line?.balance || "0"),
+          limit: String(line?.limit || "0")
+        }))
+    );
+
+    if (!result?.result?.marker) break;
+    marker = result.result.marker;
+    pages += 1;
+  }
+
+  return out;
+}
+
 
 async function readTrustlineCount(client: Client, address: string): Promise<number> {
   let count = 0;
@@ -72,6 +129,19 @@ async function readTrustlineCount(client: Client, address: string): Promise<numb
   }
 
   return count;
+}
+
+async function readTransactionBreakdown(client: Client, address: string) {
+  const result: any = await client.request({
+    command: "account_tx",
+    account: address,
+    ledger_index_min: -1,
+    ledger_index_max: -1,
+    limit: 20
+  });
+
+  const arr = Array.isArray(result?.result?.transactions) ? result.result.transactions : [];
+  return arr.map((entry: any) => summarizeTransaction(entry?.tx || entry?.tx_json || entry || {}, entry?.meta || entry?.metaData || {}, entry));
 }
 
 async function readRecentTxCount(client: Client, address: string): Promise<number> {
@@ -112,17 +182,23 @@ export async function readWallet(address: string): Promise<WalletRead> {
 
   let trustlines = 0;
   let recentTxCount = 0;
+  let tokenHoldings: Array<{ currency: string; issuer: string; balance: string; limit: string }> = [];
+  let transactionBreakdown: Array<{ hash: string; timestamp: number | null; type: string; result: string; summary: string; amount: string | null; currency: string | null; issuer: string | null; counterparty: string | null }> = [];
 
   try {
     trustlines = await readTrustlineCount(client, address);
+    tokenHoldings = await readTokenHoldings(client, address);
   } catch {
     trustlines = 0;
+    tokenHoldings = [];
   }
 
   try {
     recentTxCount = await readRecentTxCount(client, address);
+    transactionBreakdown = await readTransactionBreakdown(client, address);
   } catch {
     recentTxCount = 0;
+    transactionBreakdown = [];
   }
 
   return {
@@ -137,6 +213,8 @@ export async function readWallet(address: string): Promise<WalletRead> {
     flags,
     masterKeyDisabled,
     regularKey,
-    regularKeyLooksBlackholed
+    regularKeyLooksBlackholed,
+    tokenHoldings,
+    transactionBreakdown
   };
 }

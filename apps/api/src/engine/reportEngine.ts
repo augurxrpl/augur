@@ -54,6 +54,8 @@ export type FullReportSource = {
 };
 
 export type FullReportBody = FullReport & {
+  tokenHoldings: Array<{ currency: string; issuer: string; balance: string; limit: string }>;
+  transactionBreakdown: Array<{ hash: string; timestamp: number | null; type: string; result: string; summary: string; amount: string | null; currency: string | null; issuer: string | null; counterparty: string | null }>;
   accountFlags: FullReportFlags;
   identitySignals: string[];
   signals: FullReportSignal[];
@@ -85,6 +87,8 @@ export async function buildReport(address: string): Promise<FullReportBody> {
     recentTxCount: wallet.recentTxCount,
     blackholeStatus: extracted.derived.blackholeStatus,
     issuerLike: extracted.derived.issuerLike,
+    tokenHoldings: wallet.tokenHoldings,
+    transactionBreakdown: wallet.transactionBreakdown,
     accountFlags: {
       masterKeyDisabled: wallet.masterKeyDisabled,
       regularKey: wallet.regularKey,
