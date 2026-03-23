@@ -44,7 +44,11 @@ export function buildRisk(
     level = "Moderate";
   }
 
-  if (wallet.masterKeyDisabled && !extracted.derived.blackholeStatus) {
+  if (extracted.derived.blackholeTier === "likely") {
+    flags.push("master_key_disabled", "likely_blackholed");
+    notes.push("Master key is disabled and no RegularKey is set. This is a likely blackhole pattern.");
+    level = level === "Low" ? "Moderate" : level;
+  } else if (extracted.derived.blackholeTier === "partial") {
     flags.push("master_key_disabled");
     notes.push("Master key is disabled but no known blackhole RegularKey was detected.");
     level = level === "Low" ? "Moderate" : level;

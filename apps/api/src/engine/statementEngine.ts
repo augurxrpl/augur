@@ -16,15 +16,21 @@ export function buildStatement(
   out.push(`Wallet ${wallet.address} is classified as ${classification.classification}.`);
 
   if (classification.classification === "Blackholed Issuer") {
-    out.push("This wallet appears to be an issuer account with blackhole characteristics.");
+    out.push("This wallet appears to be an issuer account with confirmed blackhole characteristics.");
     out.push("Master key is disabled and the RegularKey points to a known blackhole address.");
+    out.push("Trustline behavior suggests issuer usage rather than standard retail or builder activity.");
+  } else if (classification.classification === "Likely Blackholed Issuer") {
+    out.push("This wallet appears to be an issuer account with likely blackhole characteristics.");
+    out.push("Master key is disabled and no RegularKey is set.");
     out.push("Trustline behavior suggests issuer usage rather than standard retail or builder activity.");
   } else if (classification.classification === "Issuer Wallet") {
     out.push("This wallet shows issuer-style trustline behavior.");
     out.push("The public ledger pattern is stronger than a generic ecosystem or retail wallet label.");
-  }
-
-  else if (classification.classification === "Builder-Style Wallet") {
+    if (extracted.derived.blackholeTier === "partial") {
+      out.push("This wallet also shows partial blackhole characteristics.");
+      out.push("Master key is disabled, but the RegularKey does not match a known blackhole address.");
+    }
+  } else if (classification.classification === "Builder-Style Wallet") {
     out.push("This wallet looks active in the XRPL ecosystem with trustline participation.");
   } else if (classification.classification === "Liquidity-Style Wallet") {
     out.push("Owner objects and trustline behavior suggest liquidity-style usage.");
@@ -45,8 +51,12 @@ export function buildStatement(
     out.push(`Risk flags: ${risk.flags.join(", ")}.`);
   }
 
-  if (extracted.derived.blackholeStatus) {
-    out.push("AUGUR detected a top-tier issuer-state override before applying generic behavior labels.");
+  if (extracted.derived.blackholeTier === "confirmed") {
+    out.push("AUGUR detected a confirmed issuer-state override before applying generic behavior labels.");
+  } else if (extracted.derived.blackholeTier === "likely") {
+    out.push("AUGUR detected a likely issuer-state override before applying generic behavior labels.");
+  } else if (extracted.derived.blackholeTier === "partial") {
+    out.push("AUGUR detected partial blackhole characteristics before applying generic behavior labels.");
   }
 
   out.push("AUGUR is read-only. No keys. No custody.");

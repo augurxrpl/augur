@@ -19,6 +19,7 @@ export type SignalResult = {
 
 export type DerivedSignals = {
   blackholeStatus: boolean;
+  blackholeTier: "confirmed" | "likely" | "partial" | "none";
   issuerLike: boolean;
   liquidityLike: boolean;
   exchangeLike: boolean;
@@ -37,6 +38,13 @@ export function extractSignals(wallet: WalletRead): ExtractedSignals {
 
   const blackholeStatus =
     wallet.masterKeyDisabled && wallet.regularKeyLooksBlackholed;
+
+  const blackholeTier: "confirmed" | "likely" | "partial" | "none" =
+    blackholeStatus
+      ? "confirmed"
+      : wallet.masterKeyDisabled
+        ? (wallet.regularKey ? "partial" : "likely")
+        : "none";
 
   const issuerLike =
     wallet.trustlines >= 20 ||
@@ -134,11 +142,16 @@ export function extractSignals(wallet: WalletRead): ExtractedSignals {
     label: "Blackhole Status",
     value: blackholeStatus,
     category: "identity",
-    scoreImpact: blackholeStatus ? 25 : 0,
-    confidenceImpact: blackholeStatus ? 20 : 0,
-    interpretation: blackholeStatus
-      ? "Master key is disabled and RegularKey points to a known blackhole address."
-      : "No definitive blackhole pattern detected."
+    scoreImpact: blackholeTier === "confirmed" ? 25 : blackholeTier === "likely" ? 18 : blackholeTier === "partial" ? 10 : 0,
+    confidenceImpact: blackholeTier === "confirmed" ? 20 : blackholeTier === "likely" ? 12 : blackholeTier === "partial" ? 8 : 0,
+    interpretation:
+      blackholeTier === "confirmed"
+        ? "Master key is disabled and RegularKey points to a known blackhole address."
+        : blackholeTier === "likely"
+          ? "Master key is disabled and no RegularKey is set. This looks like a likely blackhole pattern."
+          : blackholeTier === "partial"
+            ? "Master key is disabled, but RegularKey does not match a known blackhole address."
+            : "No definitive blackhole pattern detected."
   });
 
   signals.push({
@@ -157,6 +170,7 @@ export function extractSignals(wallet: WalletRead): ExtractedSignals {
     signals,
     derived: {
       blackholeStatus,
+      blackholeTier,
       issuerLike,
       liquidityLike,
       exchangeLike,

@@ -19,6 +19,7 @@ export type FullReport = {
   trustlines: number;
   recentTxCount: number;
   blackholeStatus: boolean;
+  blackholeTier: "confirmed" | "likely" | "partial" | "none";
   issuerLike: boolean;
 };
 
@@ -86,6 +87,7 @@ export async function buildReport(address: string): Promise<FullReportBody> {
     trustlines: wallet.trustlines,
     recentTxCount: wallet.recentTxCount,
     blackholeStatus: extracted.derived.blackholeStatus,
+    blackholeTier: extracted.derived.blackholeTier,
     issuerLike: extracted.derived.issuerLike,
     tokenHoldings: wallet.tokenHoldings,
     transactionBreakdown: wallet.transactionBreakdown,
