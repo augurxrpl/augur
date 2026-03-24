@@ -23,21 +23,71 @@ const app = express();
     });
   });
 
-  app.get("/api/subscription/quote", (_req: Request, res: Response) => {
-    res.status(501).json({
+  app.get("/api/subscription/quote", (req: Request, res: Response) => {
+    const requestedTierId =
+      typeof req.query.tierId === "string" ? req.query.tierId.trim().toLowerCase() : "";
+    const tier = getTierById(requestedTierId);
+    if (!tier) {
+      return res.status(400).json({
+        ok: false,
+        area: "subscription",
+        error: "Invalid tier",
+        message: "Valid tierId values are foundation, pro, enterprise"
+      });
+    }
+    return res.status(501).json({
       ok: false,
       area: "subscription",
       error: "Not implemented",
-      message: "Subscription quoting is not implemented yet"
+      message: "Subscription quoting is not implemented yet",
+      quote: {
+        tierId: tier.tierId,
+        tierName: tier.tierName,
+        monthlyUsd: tier.monthlyUsd,
+        annualUsd: tier.annualUsd,
+        xrpQuote: null,
+        drops: null,
+        pricingSource: null,
+        quotedAt: new Date().toISOString(),
+        expiresAt: null,
+        implemented: false
+      }
     });
   });
 
-  app.get("/api/subscription/status", (_req: Request, res: Response) => {
-    res.status(501).json({
+  app.get("/api/subscription/status", (req: Request, res: Response) => {
+    const requestedTierId =
+      typeof req.query.tierId === "string" ? req.query.tierId.trim().toLowerCase() : "";
+    const tier = getTierById(requestedTierId);
+    if (!tier && requestedTierId) {
+      return res.status(400).json({
+        ok: false,
+        area: "subscription",
+        error: "Invalid tier",
+        message: "Valid tierId values are foundation, pro, enterprise"
+      });
+    }
+    return res.status(501).json({
       ok: false,
       area: "subscription",
       error: "Not implemented",
-      message: "Subscription status is not implemented yet"
+      message: "Subscription status is not implemented yet",
+      subscription: tier ? {
+        tierId: tier.tierId,
+        tierName: tier.tierName,
+        walletLimit: tier.walletLimit,
+        reportDepth: tier.reportDepth,
+        historyDepth: tier.historyDepth,
+        exportAccess: tier.exportAccess,
+        apiAccess: tier.apiAccess,
+        prioritySupport: tier.prioritySupport,
+        featureFlags: tier.featureFlags,
+        status: tier.status,
+        active: false,
+        renewalAt: null,
+        expiresAt: null,
+        implemented: false
+      } : null
     });
   });
 app.use(cors());
@@ -193,4 +243,30 @@ async function start() {
   });
 }
 
-start();
+start();type SubscriptionTier = {
+  tierId: string;
+  tierName: string;
+  monthlyUsd: number;
+  annualUsd: number | null;
+  walletLimit: number;
+  reportDepth: string;
+  historyDepth: string;
+  exportAccess: boolean;
+  apiAccess: boolean;
+  prioritySupport: boolean;
+  featureFlags: string[];
+  status: "active" | "planned";
+};
+
+const SUBSCRIPTION_TIERS: SubscriptionTier[] = [
+  { tierId: "foundation", tierName: "Foundation", monthlyUsd: 29, annualUsd: 290, walletLimit: 5, reportDepth: "standard", historyDepth: "30d", exportAccess: false, apiAccess: false, prioritySupport: false, featureFlags: ["wallet_reports","classification","blackhole_signals","token_holdings","recent_transactions"], status: "active" },
+  { tierId: "pro", tierName: "Pro", monthlyUsd: 99, annualUsd: 990, walletLimit: 25, reportDepth: "extended", historyDepth: "90d", exportAccess: true, apiAccess: false, prioritySupport: true, featureFlags: ["wallet_reports","classification","blackhole_signals","token_holdings","recent_transactions","extended_breakdowns","csv_exports","saved_wallets"], status: "planned" },
+  { tierId: "enterprise", tierName: "Enterprise", monthlyUsd: 499, annualUsd: null, walletLimit: 250, reportDepth: "full", historyDepth: "365d", exportAccess: true, apiAccess: true, prioritySupport: true, featureFlags: ["wallet_reports","classification","blackhole_signals","token_holdings","recent_transactions","extended_breakdowns","csv_exports","saved_wallets","api_access","team_access"], status: "planned" }
+];
+
+function getTierById(tierId: string | undefined) {
+  if (!tierId) return null;
+  return SUBSCRIPTION_TIERS.find((tier) => tier.tierId === tierId) ?? null;
+}
+
+
