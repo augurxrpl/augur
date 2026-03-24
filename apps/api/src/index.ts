@@ -13,6 +13,33 @@ const VERSION = process.env.AUGUR_VERSION || "phase2-report-engine-v1";
 
 const app = express();
 
+  app.get("/api/subscription/health", (_req: Request, res: Response) => {
+    res.json({
+      ok: true,
+      area: "subscription",
+      status: "skeleton-live",
+      message: "Subscription route skeleton is live",
+      implemented: false
+    });
+  });
+
+  app.get("/api/subscription/quote", (_req: Request, res: Response) => {
+    res.status(501).json({
+      ok: false,
+      area: "subscription",
+      error: "Not implemented",
+      message: "Subscription quoting is not implemented yet"
+    });
+  });
+
+  app.get("/api/subscription/status", (_req: Request, res: Response) => {
+    res.status(501).json({
+      ok: false,
+      area: "subscription",
+      error: "Not implemented",
+      message: "Subscription status is not implemented yet"
+    });
+  });
 app.use(cors());
 app.disable("x-powered-by");
 app.use(express.json({ limit: "2mb" }));
