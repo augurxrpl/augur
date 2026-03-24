@@ -345,7 +345,7 @@ function buildQuoteReference(tierId: string) {
   return `AUGUR-${tierId.toUpperCase()}-${stamp}`;
 }
 
-async function findMatchingSubscriptionPayment(expectedDrops: string) {
+async function findMatchingSubscriptionPayment(expectedDrops: string, maxAgeMs = 15 * 60 * 1000) {
   if (!AUGUR_SUBSCRIPTION_WALLET) {
     throw new Error("AUGUR_SUBSCRIPTION_WALLET is not configured");
   }
@@ -375,12 +375,19 @@ async function findMatchingSubscriptionPayment(expectedDrops: string) {
       if (typeof delivered !== "string") continue;
       if (String(delivered) !== String(expectedDrops)) continue;
 
+      const txDate = typeof tx.date === "number" ? new Date((tx.date + 946684800) * 1000).toISOString() : null;
+      const txTimeMs = typeof tx.date === "number" ? (tx.date + 946684800) * 1000 : null;
+      const ageMs = txTimeMs ? Date.now() - txTimeMs : null;
+      if (ageMs !== null && ageMs > maxAgeMs) continue;
+
       return {
         matched: true,
         hash: String(row?.hash || tx.hash || ""),
         sourceWallet: String(tx.Account || ""),
         destinationWallet: String(tx.Destination || ""),
         deliveredDrops: String(delivered),
+        txDate,
+        ageMs,
         ledgerIndex: row?.ledger_index ?? null,
         validated: row?.validated !== false
       };
