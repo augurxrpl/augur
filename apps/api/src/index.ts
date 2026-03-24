@@ -23,7 +23,7 @@ const app = express();
     });
   });
 
-  app.get("/api/subscription/quote", (req: Request, res: Response) => {
+  app.get("/api/subscription/quote", async (req: Request, res: Response) => {
     const requestedTierId =
       typeof req.query.tierId === "string" ? req.query.tierId.trim().toLowerCase() : "";
     const tier = getTierById(requestedTierId);
@@ -35,24 +35,40 @@ const app = express();
         message: "Valid tierId values are foundation, pro, enterprise"
       });
     }
-    return res.status(501).json({
-      ok: false,
+    try {
+      const price = await fetchXrpUsdQuote();
+      const usdTarget = tier.monthlyUsd;
+      const xrpQuote = Number((usdTarget / price.usd).toFixed(6));
+      const drops = String(Math.round(xrpQuote * 1_000_000));
+      const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+
+      return res.json({
+      ok: true,
       area: "subscription",
-      error: "Not implemented",
-      message: "Subscription quoting is not implemented yet",
+      message: "Subscription quote generated",
       quote: {
         tierId: tier.tierId,
         tierName: tier.tierName,
         monthlyUsd: tier.monthlyUsd,
         annualUsd: tier.annualUsd,
-        xrpQuote: null,
-        drops: null,
-        pricingSource: null,
+        usdTarget,
+        xrpQuote,
+        drops,
+        pricingSource: price.pricingSource,
+        priceUpdatedAt: price.lastUpdatedAt,
         quotedAt: new Date().toISOString(),
-        expiresAt: null,
-        implemented: false
+        expiresAt,
+        implemented: true
       }
     });
+    } catch (error) {
+      return res.status(502).json({
+        ok: false,
+        area: "subscription",
+        error: "Pricing unavailable",
+        message: error instanceof Error ? error.message : "Failed to fetch XRP price"
+      });
+    }
   });
 
   app.get("/api/subscription/status", (req: Request, res: Response) => {
@@ -267,6 +283,23 @@ const SUBSCRIPTION_TIERS: SubscriptionTier[] = [
 function getTierById(tierId: string | undefined) {
   if (!tierId) return null;
   return SUBSCRIPTION_TIERS.find((tier) => tier.tierId === tierId) ?? null;
+}
+
+async function fetchXrpUsdQuote() {
+  const url = "https://api.coingecko.com/api/v3/simple/price?ids=ripple&vs_currencies=usd&include_last_updated_at=true&precision=6";
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`CoinGecko price fetch failed: ${res.status}`);
+  const data = await res.json() as { ripple?: { usd?: number; last_updated_at?: number } };
+  const usd = data?.ripple?.usd;
+  const lastUpdatedAt = data?.ripple?.last_updated_at;
+  if (typeof usd !== "number" || !Number.isFinite(usd) || usd <= 0) {
+    throw new Error("CoinGecko XRP/USD price missing");
+  }
+  return {
+    usd,
+    lastUpdatedAt: typeof lastUpdatedAt === "number" ? new Date(lastUpdatedAt * 1000).toISOString() : null,
+    pricingSource: "coingecko:ripple-usd"
+  };
 }
 
 
