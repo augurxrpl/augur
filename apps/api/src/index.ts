@@ -259,6 +259,8 @@ async function start() {
   app.get("/api/subscription/check-payment", async (req: Request, res: Response) => {
     const expectedDrops =
       typeof req.query.expectedDrops === "string" ? req.query.expectedDrops.trim() : "";
+    const quoteReference =
+      typeof req.query.quoteReference === "string" ? req.query.quoteReference.trim() : "";
 
     if (!expectedDrops) {
       return res.status(400).json({
@@ -270,7 +272,7 @@ async function start() {
     }
 
     try {
-      const match = await findMatchingSubscriptionPayment(expectedDrops);
+      const match = await findMatchingSubscriptionPayment(expectedDrops, quoteReference);
       return res.json({
         ok: true,
         area: "subscription",
@@ -345,7 +347,14 @@ function buildQuoteReference(tierId: string) {
   return `AUGUR-${tierId.toUpperCase()}-${stamp}`;
 }
 
-async function findMatchingSubscriptionPayment(expectedDrops: string, maxAgeMs = 15 * 60 * 1000) {
+function decodeFirstMemo(tx: any) {
+  const m = Array.isArray(tx?.Memos) ? tx.Memos[0]?.Memo : null;
+  const hex = typeof m?.MemoData === "string" ? m.MemoData : "";
+  if (!hex) return "";
+  try { return Buffer.from(hex, "hex").toString("utf8"); } catch { return ""; }
+}
+
+async function findMatchingSubscriptionPayment(expectedDrops: string, quoteReference = "", maxAgeMs = 15 * 60 * 1000) {
   if (!AUGUR_SUBSCRIPTION_WALLET) {
     throw new Error("AUGUR_SUBSCRIPTION_WALLET is not configured");
   }
@@ -374,6 +383,9 @@ async function findMatchingSubscriptionPayment(expectedDrops: string, maxAgeMs =
       const delivered = meta?.delivered_amount !== undefined ? meta.delivered_amount : tx.Amount;
       if (typeof delivered !== "string") continue;
       if (String(delivered) !== String(expectedDrops)) continue;
+
+      const memo = decodeFirstMemo(tx);
+      if (quoteReference && memo !== quoteReference) continue;
 
       const txDate = typeof tx.date === "number" ? new Date((tx.date + 946684800) * 1000).toISOString() : null;
       const txTimeMs = typeof tx.date === "number" ? (tx.date + 946684800) * 1000 : null;
