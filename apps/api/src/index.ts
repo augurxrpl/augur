@@ -10,6 +10,7 @@ import { getAddressValidationError, normalizeAddress } from "./utils/validateAdd
 const PORT = Number(process.env.PORT || "8787");
 const HOST = String(process.env.AUGUR_BIND || process.env.HOST || "127.0.0.1");
 const VERSION = process.env.AUGUR_VERSION || "phase2-report-engine-v1";
+const AUGUR_SUBSCRIPTION_WALLET = process.env.AUGUR_SUBSCRIPTION_WALLET || "";
 
 const app = express();
 
@@ -41,6 +42,7 @@ const app = express();
       const xrpQuote = Number((usdTarget / price.usd).toFixed(6));
       const drops = String(Math.round(xrpQuote * 1_000_000));
       const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+      const quoteReference = buildQuoteReference(tier.tierId);
 
       return res.json({
       ok: true,
@@ -58,6 +60,9 @@ const app = express();
         priceUpdatedAt: price.lastUpdatedAt,
         quotedAt: new Date().toISOString(),
         expiresAt,
+        paymentWallet: AUGUR_SUBSCRIPTION_WALLET || null,
+        quoteReference,
+        paymentMemo: quoteReference,
         implemented: true
       }
     });
@@ -300,6 +305,11 @@ async function fetchXrpUsdQuote() {
     lastUpdatedAt: typeof lastUpdatedAt === "number" ? new Date(lastUpdatedAt * 1000).toISOString() : null,
     pricingSource: "coingecko:ripple-usd"
   };
+}
+
+function buildQuoteReference(tierId: string) {
+  const stamp = Date.now().toString(36).toUpperCase();
+  return `AUGUR-${tierId.toUpperCase()}-${stamp}`;
 }
 
 
