@@ -4,6 +4,7 @@ import cors from "cors";
 import { mountExtras } from "./mount_extras";
 import { buildReport } from "./engine/reportEngine";
 import { XRPL_URL } from "./engine/xrplReader";
+import { Client } from "xrpl";
 import { errorBody, okSource, nowIso } from "./utils/response";
 import { getAddressValidationError, normalizeAddress } from "./utils/validateAddress";
 
@@ -255,6 +256,38 @@ async function start() {
     console.error("[augur] mountExtras failed", error);
   }
 
+  app.get("/api/subscription/check-payment", async (req: Request, res: Response) => {
+    const expectedDrops =
+      typeof req.query.expectedDrops === "string" ? req.query.expectedDrops.trim() : "";
+
+    if (!expectedDrops) {
+      return res.status(400).json({
+        ok: false,
+        area: "subscription",
+        error: "Missing expectedDrops",
+        message: "Provide expectedDrops as a query parameter"
+      });
+    }
+
+    try {
+      const match = await findMatchingSubscriptionPayment(expectedDrops);
+      return res.json({
+        ok: true,
+        area: "subscription",
+        expectedDrops,
+        paymentWallet: AUGUR_SUBSCRIPTION_WALLET || null,
+        ...match
+      });
+    } catch (error) {
+      return res.status(500).json({
+        ok: false,
+        area: "subscription",
+        error: "Payment check failed",
+        message: error instanceof Error ? error.message : "Unknown payment check error"
+      });
+    }
+  });
+
   app.use((_req: Request, res: Response) => {
     res.status(404).json(errorBody("Not found"));
   });
@@ -310,6 +343,53 @@ async function fetchXrpUsdQuote() {
 function buildQuoteReference(tierId: string) {
   const stamp = Date.now().toString(36).toUpperCase();
   return `AUGUR-${tierId.toUpperCase()}-${stamp}`;
+}
+
+async function findMatchingSubscriptionPayment(expectedDrops: string) {
+  if (!AUGUR_SUBSCRIPTION_WALLET) {
+    throw new Error("AUGUR_SUBSCRIPTION_WALLET is not configured");
+  }
+
+  const client = new Client(XRPL_URL);
+  await client.connect();
+
+  try {
+    const resp: any = await client.request({
+      command: "account_tx",
+      account: AUGUR_SUBSCRIPTION_WALLET,
+      ledger_index_min: -1,
+      ledger_index_max: -1,
+      limit: 50
+    });
+
+    const txs = Array.isArray(resp?.result?.transactions) ? resp.result.transactions : [];
+
+    for (const row of txs) {
+      const tx = row?.tx_json || row?.tx || null;
+      const meta = row?.meta || null;
+      if (row?.validated === false) continue;
+      if (!tx || tx.TransactionType !== "Payment") continue;
+      if (String(tx.Destination || "") !== AUGUR_SUBSCRIPTION_WALLET) continue;
+
+      const delivered = meta?.delivered_amount !== undefined ? meta.delivered_amount : tx.Amount;
+      if (typeof delivered !== "string") continue;
+      if (String(delivered) !== String(expectedDrops)) continue;
+
+      return {
+        matched: true,
+        hash: String(row?.hash || tx.hash || ""),
+        sourceWallet: String(tx.Account || ""),
+        destinationWallet: String(tx.Destination || ""),
+        deliveredDrops: String(delivered),
+        ledgerIndex: row?.ledger_index ?? null,
+        validated: row?.validated !== false
+      };
+    }
+
+    return { matched: false };
+  } finally {
+    await client.disconnect();
+  }
 }
 
 
