@@ -18,13 +18,18 @@ export function classifyWallet(
   const identitySignals: string[] = [];
   const summary: string[] = [];
 
-  if (derived.blackholeTier === "confirmed" && derived.issuerLike) {
-    identitySignals.push("blackholeStatus", "issuerLike");
-    summary.push("Top-priority issuer-state override detected.");
-    summary.push("Wallet matches a confirmed blackholed issuer pattern.");
+  if (derived.blackholeTier === "confirmed") {
+    identitySignals.push("blackholeStatus");
+    if (derived.issuerLike) identitySignals.push("issuerLike");
+    summary.push("Top-priority blackhole override detected.");
+    summary.push(
+      derived.issuerLike
+        ? "Wallet matches a confirmed blackholed issuer pattern."
+        : "Wallet matches a confirmed blackholed wallet pattern."
+    );
     return {
-      classification: "Blackholed Issuer",
-      confidence: 95,
+      classification: derived.issuerLike ? "Blackholed Issuer" : "Confirmed Blackholed Wallet",
+      confidence: derived.issuerLike ? 95 : 92,
       identitySignals,
       summary
     };

@@ -19,6 +19,10 @@ export function buildStatement(
     out.push("This wallet appears to be an issuer account with confirmed blackhole characteristics.");
     out.push("Master key is disabled and the RegularKey points to a known blackhole address.");
     out.push("Trustline behavior suggests issuer usage rather than standard retail or builder activity.");
+  } else if (classification.classification === "Confirmed Blackholed Wallet") {
+    out.push("This wallet matches a confirmed blackhole pattern on the public ledger.");
+    out.push("Master key is disabled and the RegularKey points to a known blackhole address.");
+    out.push("This wallet can still show transaction activity, but blackhole state overrides generic active-wallet labeling.");
   } else if (classification.classification === "Likely Blackholed Issuer") {
     out.push("This wallet appears to be an issuer account with likely blackhole characteristics.");
     out.push("Master key is disabled and no RegularKey is set.");

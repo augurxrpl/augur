@@ -20,9 +20,16 @@ export function buildRisk(
   let level: RiskLevel = "Low";
 
   if (classification.classification === "Blackholed Issuer") {
-    flags.push("issuer_account", "permanently_blackholed");
+    flags.push("issuer_account", "permanently_blackholed", "confirmed_blackhole");
     notes.push("Issuer-state signal is strong and identity appears intentionally constrained.");
-    level = "Low";
+    level = "Moderate";
+    return { level, flags, notes };
+  }
+
+  if (classification.classification === "Confirmed Blackholed Wallet") {
+    flags.push("confirmed_blackhole");
+    notes.push("Confirmed blackhole pattern detected. Generic activity labels were overridden.");
+    level = "Moderate";
     return { level, flags, notes };
   }
 
